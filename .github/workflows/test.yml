@@ -39,6 +39,9 @@ jobs:
       - name: Install dependency gems
         run: |
           bundle install
+      - name: Build
+        run: |
+          bundle exec rake compile
       - name: Test
         run: |
           bundle exec rake
