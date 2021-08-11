@@ -24,7 +24,7 @@ jobs:
           ruby-version: ${{ matrix.ruby-version }}
       - name: Prepare the Apache Arrow APT repository
         if: |
-          ${{ matrix.runs-on }} == 'ubuntu-latest'
+          ${{ matrix.runs-on == 'ubuntu-latest' }}
         run: |
           sudo apt update
           sudo apt install -y -V ca-certificates lsb-release wget
@@ -33,7 +33,7 @@ jobs:
           sudo apt update
       - name: Install dependency Homebrew packages
         if: |
-          ${{ matrix.runs-on }} == 'macos-latest'
+          ${{ matrix.runs-on == 'macos-latest' }}
         run: |
           brew bundle
       - name: Install dependency gems
