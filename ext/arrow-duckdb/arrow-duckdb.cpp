@@ -24,12 +24,15 @@
 #include <ruby-duckdb.h>
 
 #include <duckdb.h>
-#include <duckdb/common/arrow_wrapper.hpp>
-#include <duckdb/function/table_function.hpp>
-#include <duckdb/main/connection.hpp>
-#include <duckdb/planner/filter/conjunction_filter.hpp>
-#include <duckdb/planner/filter/constant_filter.hpp>
-#include <duckdb/planner/table_filter.hpp>
+#include <duckdb.hpp>
+#ifndef DUCKDB_AMALGAMATION
+#  include <duckdb/common/arrow_wrapper.hpp>
+#  include <duckdb/function/table_function.hpp>
+#  include <duckdb/main/connection.hpp>
+#  include <duckdb/planner/filter/conjunction_filter.hpp>
+#  include <duckdb/planner/filter/constant_filter.hpp>
+#  include <duckdb/planner/table_filter.hpp>
+#endif
 
 extern "C" void Init_arrow_duckdb(void);
 
