@@ -1,0 +1,5 @@
+/ext/arrow-duckdb/*.o
+/ext/arrow-duckdb/*.so
+/ext/arrow-duckdb/Makefile
+/ext/arrow-duckdb/mkmf.log
+/pkg/
