@@ -16,10 +16,11 @@ require "extpp"
 require "mkmf-gnome"
 require "native-package-installer"
 
-required_pkg_config_package("arrow-glib")
+required_pkg_config_package("arrow-glib") or exit(false)
 required_pkg_config_package("arrow-dataset",
                             debian: "libarrow-dataset-dev",
-                            redhat: "arrow-dataset-devel")
+                            redhat: "arrow-dataset-devel") or exit(false)
+have_library("duckdb") or exit(false)
 
 [
   ["glib2", "ext/glib2"],
@@ -30,7 +31,5 @@ required_pkg_config_package("arrow-dataset",
   build_dir = source_dir
   add_depend_package_path(name, source_dir, build_dir)
 end
-
-have_library("duckdb") or exit(false)
 
 create_makefile("arrow_duckdb")
