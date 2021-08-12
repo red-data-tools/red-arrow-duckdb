@@ -35,8 +35,7 @@ Gem::Specification.new do |spec|
   description = clean_white_space.call(entries[entries.index("Description") + 1])
   spec.summary, spec.description, = description.split(/\n\n+/, 3)
   spec.license = "Apache-2.0"
-  spec.files = ["README.md", "Rakefile", "Gemfile", "#{spec.name}.gemspec"]
-  spec.files += [".yardopts"]
+  spec.files = ["README.md", "#{spec.name}.gemspec"]
   spec.files += Dir.glob("lib/**/*.rb")
   spec.files += Dir.glob("ext/**/*.{cpp,hpp}")
   spec.files += Dir.glob("doc/text/*")
