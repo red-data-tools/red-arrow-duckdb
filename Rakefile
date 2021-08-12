@@ -16,7 +16,6 @@
 
 require "bundler/gem_helper"
 require "rake/clean"
-require "yard"
 
 base_dir = File.join(File.dirname(__FILE__))
 
@@ -79,6 +78,3 @@ task :test do
 end
 
 task default: :test
-
-YARD::Rake::YardocTask.new do |task|
-end
