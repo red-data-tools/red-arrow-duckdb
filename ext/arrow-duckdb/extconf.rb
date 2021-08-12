@@ -14,9 +14,12 @@
 
 require "extpp"
 require "mkmf-gnome"
+require "native-package-installer"
 
 required_pkg_config_package("arrow-glib")
-required_pkg_config_package("arrow-dataset")
+required_pkg_config_package("arrow-dataset",
+                            debian: "libarrow-dataset-dev",
+                            redhat: "arrow-dataset-devel")
 
 [
   ["glib2", "ext/glib2"],
