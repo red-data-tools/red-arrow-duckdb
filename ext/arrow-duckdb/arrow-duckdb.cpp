@@ -17,22 +17,12 @@
 #include <arrow-glib/arrow-glib.hpp>
 
 #include <arrow/c/bridge.h>
-#include <arrow/dataset/api.h>
 
 #include <rbgobject.h>
 
 #include <ruby-duckdb.h>
 
-#include <duckdb.hpp>
-#ifndef DUCKDB_AMALGAMATION
-#  include <duckdb.h>
-#  include <duckdb/common/arrow_wrapper.hpp>
-#  include <duckdb/function/table_function.hpp>
-#  include <duckdb/main/connection.hpp>
-#  include <duckdb/planner/filter/conjunction_filter.hpp>
-#  include <duckdb/planner/filter/constant_filter.hpp>
-#  include <duckdb/planner/table_filter.hpp>
-#endif
+#include "arrow-duckdb-registration.hpp"
 
 extern "C" void Init_arrow_duckdb(void);
 
@@ -195,178 +185,6 @@ namespace {
     return result;
   }
 
-  std::shared_ptr<arrow::Scalar>
-  convert_constant(duckdb::Value &value)
-  {
-    switch (value.type().id()) {
-    case duckdb::LogicalTypeId::BOOLEAN:
-      return arrow::MakeScalar(value.GetValue<bool>());
-    case duckdb::LogicalTypeId::TINYINT:
-      return arrow::MakeScalar(value.GetValue<int8_t>());
-    case duckdb::LogicalTypeId::SMALLINT:
-      return arrow::MakeScalar(value.GetValue<int16_t>());
-    case duckdb::LogicalTypeId::INTEGER:
-      return arrow::MakeScalar(value.GetValue<int32_t>());
-    case duckdb::LogicalTypeId::BIGINT:
-      return arrow::MakeScalar(value.GetValue<int64_t>());
-    // case duckdb::LogicalTypeId::HUGEINT:
-    //   return arrow::MakeScalar(value.GetValue<duckdb::hugeint_t>());
-    // case duckdb::LogicalTypeId::DATE:
-    //   return arrow::MakeScalar(arrow::date32(), value.GetValue<int32_t>());
-    // case duckdb::LogicalTypeId::TIME:
-    //   return arrow::MakeScalar(arrow::time64(), value.GetValue<int64_t>());
-    // case duckdb::LogicalTypeId::TIMESTAMP:
-    //   return arrow::MakeScalar(arrow::timestamp(),
-    //                            value.GetValue<int64_t>());
-    case duckdb::LogicalTypeId::UTINYINT:
-      return arrow::MakeScalar(value.GetValue<uint8_t>());
-    case duckdb::LogicalTypeId::USMALLINT:
-      return arrow::MakeScalar(value.GetValue<uint16_t>());
-    case duckdb::LogicalTypeId::UINTEGER:
-      return arrow::MakeScalar(value.GetValue<uint32_t>());
-    case duckdb::LogicalTypeId::UBIGINT:
-      return arrow::MakeScalar(value.GetValue<uint64_t>());
-    case duckdb::LogicalTypeId::FLOAT:
-      return arrow::MakeScalar(value.GetValue<float>());
-    case duckdb::LogicalTypeId::DOUBLE:
-      return arrow::MakeScalar(value.GetValue<double>());
-    case duckdb::LogicalTypeId::VARCHAR:
-      return arrow::MakeScalar(value.ToString());
-    // case LogicalTypeId::DECIMAL:
-    default:
-      throw duckdb::NotImplementedException(
-        "[arrow][filter][pushdown] not implemented value type: %s",
-        value.type().ToString());
-    }
-  }
-
-  arrow::compute::Expression
-  convert_filter(duckdb::TableFilter *filter,
-                 std::string &column_name)
-  {
-    auto field = arrow::compute::field_ref(column_name);
-    switch (filter->filter_type) {
-    case duckdb::TableFilterType::CONSTANT_COMPARISON:
-      {
-        auto constant_filter = static_cast<duckdb::ConstantFilter *>(filter);
-        auto constant_scalar = convert_constant(constant_filter->constant);
-        auto constant = arrow::compute::literal(constant_scalar);
-        switch (constant_filter->comparison_type) {
-        case duckdb::ExpressionType::COMPARE_EQUAL:
-          return arrow::compute::equal(field, constant);
-        case duckdb::ExpressionType::COMPARE_LESSTHAN:
-          return arrow::compute::less(field, constant);
-        case duckdb::ExpressionType::COMPARE_GREATERTHAN:
-          return arrow::compute::greater(field, constant);
-        case duckdb::ExpressionType::COMPARE_LESSTHANOREQUALTO:
-          return arrow::compute::less_equal(field, constant);
-        case duckdb::ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-          return arrow::compute::greater_equal(field, constant);
-        default:
-          throw duckdb::NotImplementedException(
-            "[arrow][filter][pushdown] not implemented comparison type: %s",
-            duckdb::ExpressionTypeToString(constant_filter->comparison_type));
-        }
-        break;
-      }
-    case duckdb::TableFilterType::IS_NULL:
-      return arrow::compute::is_null(field);
-    case duckdb::TableFilterType::IS_NOT_NULL:
-      return arrow::compute::is_valid(field);
-    case duckdb::TableFilterType::CONJUNCTION_OR:
-      {
-        auto or_filter = static_cast<duckdb::ConjunctionOrFilter *>(filter);
-        std::vector<arrow::compute::Expression> sub_expressions;
-        for (auto &child_filter : or_filter->child_filters) {
-          sub_expressions.emplace_back(
-            std::move(convert_filter(child_filter.get(), column_name)));
-        }
-        return arrow::compute::or_(sub_expressions);
-      }
-    case duckdb::TableFilterType::CONJUNCTION_AND:
-      {
-        auto and_filter = static_cast<duckdb::ConjunctionAndFilter *>(filter);
-        std::vector<arrow::compute::Expression> sub_expressions;
-        for (auto &child_filter : and_filter->child_filters) {
-          sub_expressions.emplace_back(
-            std::move(convert_filter(child_filter.get(), column_name)));
-        }
-        return arrow::compute::and_(sub_expressions);
-      }
-    default:
-      throw duckdb::NotImplementedException(
-        "[arrow][filter][pushdown] unknown filter type: %u",
-        filter->filter_type);
-    }
-  }
-
-  arrow::compute::Expression
-  convert_filters(std::unordered_map<
-                    idx_t,
-                    std::unique_ptr<duckdb::TableFilter>
-                  > &filters,
-                  std::unordered_map<idx_t, std::string> &column_names)
-  {
-    std::vector<arrow::compute::Expression> expressions;
-    for (auto it = filters.begin(); it != filters.end(); ++it) {
-      expressions.emplace_back(
-        std::move(convert_filter(it->second.get(), column_names[it->first])));
-    }
-    return arrow::compute::and_(expressions);
-  }
-
-  arrow::Result<std::unique_ptr<duckdb::ArrowArrayStreamWrapper>>
-  arrow_table_produce_internal(uintptr_t data,
-                               std::pair<
-                                 std::unordered_map<idx_t, std::string>,
-                                 std::vector<std::string>
-                               > &project_columns,
-                               duckdb::TableFilterCollection *filters)
-  {
-    auto garrow_table = GARROW_TABLE(reinterpret_cast<gpointer>(data));
-    auto arrow_table = garrow_table_get_raw(garrow_table);
-    auto dataset =
-      std::make_shared<arrow::dataset::InMemoryDataset>(arrow_table);
-    ARROW_ASSIGN_OR_RAISE(auto scanner_builder, dataset->NewScan());
-    bool have_filter =
-      filters &&
-      filters->table_filters &&
-      !filters->table_filters->filters.empty();
-    if (have_filter) {
-      ARROW_RETURN_NOT_OK(
-        scanner_builder->Filter(convert_filters(filters->table_filters->filters,
-                                                project_columns.first)));
-    }
-    if (!project_columns.second.empty()) {
-      ARROW_RETURN_NOT_OK(scanner_builder->Project(project_columns.second));
-    }
-    ARROW_ASSIGN_OR_RAISE(auto scanner, scanner_builder->Finish());
-    ARROW_ASSIGN_OR_RAISE(auto reader, scanner->ToRecordBatchReader());
-    auto stream_wrapper = duckdb::make_unique<duckdb::ArrowArrayStreamWrapper>();
-    ARROW_RETURN_NOT_OK(
-      arrow::ExportRecordBatchReader(reader,
-                                     &(stream_wrapper->arrow_array_stream)));
-    return stream_wrapper;
-  }
-
-  std::unique_ptr<duckdb::ArrowArrayStreamWrapper>
-  arrow_table_produce(uintptr_t data,
-                      std::pair<
-                        std::unordered_map<idx_t, std::string>,
-                        std::vector<std::string>
-                      > &project_columns,
-                      duckdb::TableFilterCollection *filters)
-  {
-    auto stream_wrapper_result =
-      arrow_table_produce_internal(data, project_columns, filters);
-    if (!stream_wrapper_result.ok()) {
-      throw std::runtime_error(
-        std::string("[arrow][produce] failed to produce: ") +
-        stream_wrapper_result.status().ToString());
-    }
-    return std::move(*stream_wrapper_result);
-  }
-
   VALUE
   query_unregister_arrow(VALUE self, VALUE name)
   {
@@ -377,9 +195,7 @@ namespace {
       rb_raise(eDuckDBError, "Database connection closed");
     }
 
-    auto c_name = StringValueCStr(name);
-    reinterpret_cast<duckdb::Connection *>(ctx->con)
-      ->Query(std::string("DROP VIEW \"") + c_name + "\"");
+    arrow_duckdb::connection_unregister(ctx->con, name);
 
     auto arrow_tables = rb_iv_get(self, "@arrow_tables");
     if (NIL_P(arrow_tables)) {
@@ -419,21 +235,11 @@ namespace {
       rb_raise(eDuckDBError, "Database connection closed");
     }
 
-    auto c_name = StringValueCStr(name);
     if (!RVAL2CBOOL(rb_obj_is_kind_of(arrow_table, cArrowTable))) {
       rb_raise(rb_eArgError, "must be Arrow::Table: %" PRIsVALUE, arrow_table);
     }
-    auto garrow_table = RVAL2GOBJ(arrow_table);
-    const idx_t rows_per_tuple = 1000000;
-    reinterpret_cast<duckdb::Connection *>(ctx->con)
-      ->TableFunction(
-        "arrow_scan",
-        {
-          duckdb::Value::POINTER(reinterpret_cast<uintptr_t>(garrow_table)),
-          duckdb::Value::POINTER(reinterpret_cast<uintptr_t>(arrow_table_produce)),
-          duckdb::Value::UBIGINT(rows_per_tuple)
-        })
-      ->CreateView(c_name, true, true);
+
+    arrow_duckdb::connection_register(ctx->con, name, arrow_table);
 
     auto arrow_tables = rb_iv_get(self, "@arrow_tables");
     if (NIL_P(arrow_tables)) {

@@ -38,7 +38,7 @@ Gem::Specification.new do |spec|
   spec.files = ["README.md", "Rakefile", "Gemfile", "#{spec.name}.gemspec"]
   spec.files += [".yardopts"]
   spec.files += Dir.glob("lib/**/*.rb")
-  spec.files += Dir.glob("ext/**/*.cpp")
+  spec.files += Dir.glob("ext/**/*.{cpp,hpp}")
   spec.files += Dir.glob("doc/text/*")
   spec.extensions = ["ext/arrow-duckdb/extconf.rb"]
 
