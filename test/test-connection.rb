@@ -22,10 +22,22 @@ class TestConnection < Test::Unit::TestCase
     end
   end
 
-  test("#query") do
-    result = @connection.query("SELECT 'data' AS string", output: :arrow)
-    assert_equal([Arrow::RecordBatch.new("string" => ["data"])],
-                 result.to_a)
+  sub_test_case("#query") do
+    test("direct") do
+      result = @connection.query("SELECT 'data' AS string", output: :arrow)
+      assert_equal([Arrow::RecordBatch.new("string" => ["data"])],
+                   result.to_a)
+    end
+
+    test("prepared statement") do
+      @connection.query("CREATE TABLE users (name VARCHAR)")
+      @connection.query("INSERT INTO users VALUES ('alice'), ('bob')")
+      result = @connection.query("SELECT * FROM users WHERE name = ?",
+                                 'alice',
+                                 output: :arrow)
+      assert_equal([Arrow::RecordBatch.new("string" => ["alice"])],
+                   result.to_a)
+    end
   end
 
   test("#query_sql_arrow") do
@@ -34,10 +46,10 @@ class TestConnection < Test::Unit::TestCase
                  result.to_a)
   end
 
-  test("#register_arrow") do
+  test("#register") do
     table = Arrow::Table.new("a" => [1, 2, 3],
                              "b" => [true, false, true])
-    @connection.register_arrow("data", table) do
+    @connection.register("data", table) do
       result = @connection.query_sql_arrow("SELECT a FROM data WHERE b")
       assert_equal([
                      Arrow::RecordBatch.new("a" => [1, 3]),

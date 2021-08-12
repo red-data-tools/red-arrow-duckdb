@@ -63,4 +63,10 @@ class TestResult < Test::Unit::TestCase
   test("#n_changed_rows") do
     assert_equal(0, @result.n_changed_rows)
   end
+
+  test("#to_table") do
+    assert_equal(Arrow::Table.new("number" => Arrow::Int32Array.new([29]),
+                                  "string" => ["data"]),
+                 @result.to_table)
+  end
 end

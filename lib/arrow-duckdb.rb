@@ -20,3 +20,4 @@ require "arrow-duckdb/version"
 require "arrow_duckdb.so"
 
 require "arrow-duckdb/connection"
+require "arrow-duckdb/result"

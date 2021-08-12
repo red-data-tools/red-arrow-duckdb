@@ -13,25 +13,9 @@
 # limitations under the License.
 
 module ArrowDuckDB
-  module ArrowableQuery
-    def query(sql, *args, output: nil)
-      return super(sql, *args) if output != :arrow
-
-      return query_sql_arrow(sql) if args.empty?
-
-      stmt = DuckDB::PreparedStatement.new(self, sql)
-      args.each_with_index do |arg, i|
-        stmt.bind(i + 1, arg)
-      end
-      stmt.execute_arrow
+  class Result
+    def to_table
+      Arrow::Table.new(schema, to_a)
     end
-  end
-end
-
-module DuckDB
-  class Connection
-    prepend ArrowDuckDB::ArrowableQuery
-
-    alias_method :register, :register_arrow
   end
 end
