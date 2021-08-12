@@ -12,11 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-require "arrow"
-require "duckdb"
+module ArrowDuckDB
+  module ArrowableQuery
+    def query(sql, *args, output: nil)
+      return super(sql, *args) if output != :arrow
 
-require "arrow-duckdb/version"
+      return query_sql_arrow(sql) if args.empty?
 
-require "arrow_duckdb.so"
+      stmt = PreparedStatement.new(self, sql)
+      args.each_with_index do |arg, i|
+        stmt.bind(i + 1, arg)
+      end
+      stmt.execute_arrow
+    end
+  end
+end
 
-require "arrow-duckdb/connection"
+DuckDB::Connection.prepend(ArrowDuckDB::ArrowableQuery)

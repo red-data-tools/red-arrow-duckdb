@@ -118,13 +118,8 @@ namespace {
   }
 
   VALUE
-  result_fetch(VALUE self)
+  result_fetch_internal(VALUE self, Result *result)
   {
-    Result *result;
-    TypedData_Get_Struct(self, Result, &result_type, result);
-
-    result_ensure_gschema(result);
-
     ArrowArray c_abi_array = {};
     duckdb_arrow_array array = &c_abi_array;
     auto state = duckdb_query_arrow_array(result->arrow, &array);
@@ -149,6 +144,76 @@ namespace {
       return Qnil;
     }
     return GOBJ2RVAL_UNREF(grecord_batch);
+  }
+
+  VALUE
+  result_fetch(VALUE self)
+  {
+    Result *result;
+    TypedData_Get_Struct(self, Result, &result_type, result);
+
+    result_ensure_gschema(result);
+
+    return result_fetch_internal(self, result);
+  }
+
+  VALUE
+  result_each(VALUE self)
+  {
+    RETURN_ENUMERATOR(self, 0, 0);
+
+    Result *result;
+    TypedData_Get_Struct(self, Result, &result_type, result);
+
+    result_ensure_gschema(result);
+
+    while (true) {
+      auto record_batch = result_fetch_internal(self, result);
+      if (NIL_P(record_batch)) {
+        break;
+      }
+      rb_yield(record_batch);
+    }
+
+    return self;
+  }
+
+  VALUE
+  result_schema(VALUE self)
+  {
+    Result *result;
+    TypedData_Get_Struct(self, Result, &result_type, result);
+
+    result_ensure_gschema(result);
+
+    return GOBJ2RVAL(result->gschema);
+  }
+
+  VALUE
+  result_n_columns(VALUE self)
+  {
+    Result *result;
+    TypedData_Get_Struct(self, Result, &result_type, result);
+
+    return ULL2NUM(duckdb_arrow_column_count(result->arrow));
+  }
+
+  VALUE
+  result_n_rows(VALUE self)
+  {
+    Result *result;
+    TypedData_Get_Struct(self, Result, &result_type, result);
+
+    return ULL2NUM(duckdb_arrow_row_count(result->arrow));
+  }
+
+  VALUE
+  result_n_changed_rows(VALUE self)
+  {
+    Result *result;
+    TypedData_Get_Struct(self, Result, &result_type, result);
+
+    return ULL2NUM(duckdb_arrow_rows_changed(result->arrow));
   }
 
   VALUE
@@ -261,18 +326,56 @@ namespace {
     }
   }
 
+  VALUE
+  prepared_statement_execute_arrow(VALUE self)
+  {
+    rubyDuckDBPreparedStatement *ctx;
+    Data_Get_Struct(self, rubyDuckDBPreparedStatement, ctx);
+
+    ID id_new;
+    CONST_ID(id_new, "new");
+    auto result = rb_funcall(cArrowDuckDBResult, id_new, 0);
+    Result *arrow_duckdb_result;
+    TypedData_Get_Struct(result, Result, &result_type, arrow_duckdb_result);
+
+    auto state = duckdb_execute_prepared_arrow(ctx->prepared_statement,
+                                               &(arrow_duckdb_result->arrow));
+    if (state == DuckDBError) {
+      if (arrow_duckdb_result->arrow) {
+        arrow_duckdb_result->error_message =
+          const_cast<char *>(
+            duckdb_query_arrow_error(arrow_duckdb_result->arrow));
+        rb_raise(eDuckDBError,
+                 "Failed to execute prepared statement: %s",
+                 arrow_duckdb_result->error_message);
+      } else {
+        rb_raise(eDuckDBError, "Failed to execute prepared statement");
+      }
+    }
+
+    return result;
+  }
+
   void init()
   {
     cArrowTable = rb_const_get(rb_const_get(rb_cObject, rb_intern("Arrow")),
                                rb_intern("Table"));
 
-    VALUE mArrowDuckDB;
-    mArrowDuckDB = rb_define_module("ArrowDuckDB");
+    auto mArrowDuckDB = rb_define_module("ArrowDuckDB");
     cArrowDuckDBResult = rb_define_class_under(mArrowDuckDB,
                                                "Result",
                                                rb_cObject);
     rb_define_alloc_func(cArrowDuckDBResult, result_alloc_func);
+    rb_include_module(cArrowDuckDBResult, rb_mEnumerable);
     rb_define_method(cArrowDuckDBResult, "fetch", result_fetch, 0);
+    rb_define_method(cArrowDuckDBResult, "each", result_each, 0);
+    rb_define_method(cArrowDuckDBResult, "schema", result_schema, 0);
+    rb_define_method(cArrowDuckDBResult, "n_columns", result_n_columns, 0);
+    rb_define_method(cArrowDuckDBResult, "n_rows", result_n_rows, 0);
+    rb_define_method(cArrowDuckDBResult,
+                     "n_changed_rows",
+                     result_n_changed_rows,
+                     0);
 
     rb_define_method(cDuckDBConnection, "query_sql_arrow", query_sql_arrow, 1);
     rb_define_method(cDuckDBConnection,
@@ -283,6 +386,14 @@ namespace {
                      "unregister_arrow",
                      query_unregister_arrow,
                      1);
+
+    auto cDuckDBPreparedStatement =
+      rb_const_get(rb_const_get(rb_cObject, rb_intern("DuckDB")),
+                   rb_intern("PreparedStatement"));
+    rb_define_method(cDuckDBPreparedStatement,
+                     "execute_arrow",
+                     prepared_statement_execute_arrow,
+                     0);
   }
 }
 

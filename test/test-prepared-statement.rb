@@ -12,35 +12,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-class TestIntegration < Test::Unit::TestCase
+class TestPreparedStatement < Test::Unit::TestCase
   def setup
     DuckDB::Database.open do |db|
       db.connect do |connection|
         @connection = connection
+        @connection.query("CREATE TABLE users (name text)")
+        @connection.query("INSERT INTO users VALUES ('alice'), ('bob')")
+        @prepared_statement =
+          @connection.prepared_statement("SELECT * FROM users WHERE name = ?")
         yield
       end
     end
   end
 
-  test("query") do
-    result = @connection.query_sql_arrow("SELECT 29 AS x")
-    loop do
-      record_batch = result.fetch
-      break if record_batch.nil?
-      p record_batch
-    end
-  end
-
-  test("register") do
-    table = Arrow::Table.new("a" => [1, 2, 3],
-                             "b" => [true, false, true])
-    @connection.register_arrow("data", table) do
-       result = @connection.query_sql_arrow("SELECT a FROM data WHERE a > 1")
-       loop do
-         record_batch = result.fetch
-         break if record_batch.nil?
-         p record_batch
-       end
-    end
+  test("#execute_arrow") do
+    @prepared_statement.bind(1, "alice")
+    assert_equal([Arrow::RecordBatch.new("string" => ["alice"])],
+                 @prepared_statement.execute_arrow.to_a)
   end
 end
