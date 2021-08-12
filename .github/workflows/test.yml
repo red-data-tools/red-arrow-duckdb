@@ -48,11 +48,6 @@ jobs:
           matrix.runs-on == 'macos-latest'
         run: |
           brew bundle
-      - name: Install dependency Homebrew packages
-        if: |
-          matrix.runs-on == 'macos-latest'
-        run: |
-          brew bundle
       - name: Install dependency gems
         run: |
           bundle install
