@@ -14,8 +14,8 @@ jobs:
           - "2.7"
           - "3.0"
         runs-on:
-          # - ubuntu-latest
-          - macos-latest
+          - ubuntu-latest
+          # - macos-latest
           # - windows-latest
     steps:
       - uses: actions/checkout@v2
@@ -31,6 +31,23 @@ jobs:
           wget https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb
           sudo apt install -y -V ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb
           sudo apt update
+      - name: Prepare the Red Data Tools APT repository
+        if: |
+          matrix.runs-on == 'ubuntu-latest'
+        run: |
+          wget https://packages.red-data-tools.org/$(lsb_release --id --short | tr 'A-Z' 'a-z')/red-data-tools-apt-source-latest-$(lsb_release --codename --short).deb
+          sudo apt install -y -V ./red-data-tools-apt-source-latest-$(lsb_release --codename --short).deb
+          sudo apt update
+      - name: Install libduckdb-dev
+        if: |
+          matrix.runs-on == 'ubuntu-latest'
+        run: |
+          sudo apt install -y -V libduckdb-dev
+      - name: Install dependency Homebrew packages
+        if: |
+          matrix.runs-on == 'macos-latest'
+        run: |
+          brew bundle
       - name: Install dependency Homebrew packages
         if: |
           matrix.runs-on == 'macos-latest'
