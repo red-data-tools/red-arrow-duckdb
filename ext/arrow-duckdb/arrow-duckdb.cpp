@@ -23,9 +23,9 @@
 
 #include <ruby-duckdb.h>
 
-#include <duckdb.h>
 #include <duckdb.hpp>
 #ifndef DUCKDB_AMALGAMATION
+#  include <duckdb.h>
 #  include <duckdb/common/arrow_wrapper.hpp>
 #  include <duckdb/function/table_function.hpp>
 #  include <duckdb/main/connection.hpp>
