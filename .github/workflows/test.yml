@@ -46,6 +46,7 @@ jobs:
         if: |
           matrix.runs-on == 'macos-latest'
         run: |
+          brew update
           brew bundle
       - name: Install dependency gems
         run: |
