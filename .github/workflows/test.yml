@@ -42,6 +42,11 @@ jobs:
           matrix.runs-on == 'ubuntu-latest'
         run: |
           sudo apt install -y -V libduckdb-dev
+      - name: Install dependency Homebrew packages
+        if: |
+          matrix.runs-on == 'macos-latest'
+        run: |
+          brew bundle
       - name: Install dependency gems
         run: |
           bundle install
