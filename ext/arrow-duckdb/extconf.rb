@@ -16,11 +16,32 @@ require "extpp"
 require "mkmf-gnome"
 require "native-package-installer"
 
-required_pkg_config_package("arrow-glib") or exit(false)
+checking_for(checking_message("Homebrew")) do
+  case NativePackageInstaller::Platform.detect
+  when NativePackageInstaller::Platform::Homebrew
+    openssl_prefix = `brew --prefix openssl`.chomp
+    unless openssl_prefix.empty?
+      PKGConfig.add_path("#{openssl_prefix}/lib/pkgconfig")
+    end
+    true
+  else
+    false
+  end
+end
+
+required_pkg_config_package("arrow-glib",
+                            debian: "libarrow-glib-dev",
+                            redhat: "arrow-glib-devel",
+                            homebrew: "apache-arrow-glib") or exit(false)
 required_pkg_config_package("arrow-dataset",
                             debian: "libarrow-dataset-dev",
                             redhat: "arrow-dataset-devel") or exit(false)
-have_library("duckdb") or exit(false)
+unless have_library("duckdb")
+  install_missing_native_package(debian: "libduckdb-dev",
+                                 redhat: "duckdb-devel",
+                                 homebrew: "duckdb") or exit(false)
+  have_library("duckdb") or exit(false)
+end
 
 [
   ["glib2", "ext/glib2"],
