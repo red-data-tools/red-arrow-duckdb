@@ -36,6 +36,22 @@
 
 namespace {
   std::shared_ptr<arrow::Scalar>
+  convert_constant_timestamp(duckdb::Value &value, arrow::TimeUnit::type unit)
+  {
+    auto scalar_result =
+      arrow::MakeScalar(arrow::timestamp(unit), value.GetValue<int64_t>());
+    if (!scalar_result.ok()) {
+      throw duckdb::InvalidInputException(
+        "[arrow][filter][pushdown][%s] "
+        "failed to convert to Apache Arrow scalar: %s: <%s>",
+        value.type().ToString(),
+        scalar_result.status().ToString(),
+        value.ToString());
+    }
+    return *scalar_result;
+  }
+
+  std::shared_ptr<arrow::Scalar>
   convert_constant(duckdb::Value &value)
   {
     switch (value.type().id()) {
@@ -55,9 +71,14 @@ namespace {
     //   return arrow::MakeScalar(arrow::date32(), value.GetValue<int32_t>());
     // case duckdb::LogicalTypeId::TIME:
     //   return arrow::MakeScalar(arrow::time64(), value.GetValue<int64_t>());
-    // case duckdb::LogicalTypeId::TIMESTAMP:
-    //   return arrow::MakeScalar(arrow::timestamp(),
-    //                            value.GetValue<int64_t>());
+    case duckdb::LogicalTypeId::TIMESTAMP_SEC:
+      return convert_constant_timestamp(value, arrow::TimeUnit::SECOND);
+    case duckdb::LogicalTypeId::TIMESTAMP_MS:
+      return convert_constant_timestamp(value, arrow::TimeUnit::MILLI);
+    case duckdb::LogicalTypeId::TIMESTAMP:
+      return convert_constant_timestamp(value, arrow::TimeUnit::MICRO);
+    case duckdb::LogicalTypeId::TIMESTAMP_NS:
+      return convert_constant_timestamp(value, arrow::TimeUnit::NANO);
     case duckdb::LogicalTypeId::UTINYINT:
       return arrow::MakeScalar(value.GetValue<uint8_t>());
     case duckdb::LogicalTypeId::USMALLINT:
@@ -75,7 +96,7 @@ namespace {
     // case LogicalTypeId::DECIMAL:
     default:
       throw duckdb::NotImplementedException(
-        "[arrow][filter][pushdown] not implemented value type: %s",
+        "[arrow][filter][pushdown][%s] not implemented value type",
         value.type().ToString());
     }
   }
