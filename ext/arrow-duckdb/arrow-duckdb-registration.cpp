@@ -24,7 +24,8 @@
 #include <duckdb.hpp>
 #ifndef DUCKDB_AMALGAMATION
 #  include <duckdb.h>
-#  include <duckdb/common/arrow_wrapper.hpp>
+#  include <duckdb/common/arrow/arrow_wrapper.hpp>
+#  include <duckdb/function/table/arrow.hpp>
 #  include <duckdb/function/table_function.hpp>
 #  include <duckdb/main/connection.hpp>
 #  include <duckdb/planner/filter/conjunction_filter.hpp>
@@ -178,11 +179,7 @@ namespace {
 
   arrow::Result<std::unique_ptr<duckdb::ArrowArrayStreamWrapper>>
   arrow_table_produce_internal(uintptr_t data,
-                               std::pair<
-                                 std::unordered_map<idx_t, std::string>,
-                                 std::vector<std::string>
-                               > &project_columns,
-                               duckdb::TableFilterCollection *filters)
+                               duckdb::ArrowStreamParameters &parameters)
   {
     auto garrow_table = GARROW_TABLE(reinterpret_cast<gpointer>(data));
     auto arrow_table = garrow_table_get_raw(garrow_table);
@@ -190,16 +187,18 @@ namespace {
       std::make_shared<arrow::dataset::InMemoryDataset>(arrow_table);
     ARROW_ASSIGN_OR_RAISE(auto scanner_builder, dataset->NewScan());
     bool have_filter =
-      filters &&
-      filters->table_filters &&
-      !filters->table_filters->filters.empty();
+      parameters.filters &&
+      !parameters.filters->filters.empty();
     if (have_filter) {
       ARROW_RETURN_NOT_OK(
-        scanner_builder->Filter(convert_filters(filters->table_filters->filters,
-                                                project_columns.first)));
+        scanner_builder->Filter(
+          convert_filters(parameters.filters->filters,
+                          parameters.projected_columns.projection_map)));
     }
-    if (!project_columns.second.empty()) {
-      ARROW_RETURN_NOT_OK(scanner_builder->Project(project_columns.second));
+    if (!parameters.projected_columns.columns.empty()) {
+      ARROW_RETURN_NOT_OK(
+        scanner_builder->Project(
+          parameters.projected_columns.columns));
     }
     ARROW_ASSIGN_OR_RAISE(auto scanner, scanner_builder->Finish());
     ARROW_ASSIGN_OR_RAISE(auto reader, scanner->ToRecordBatchReader());
@@ -212,20 +211,24 @@ namespace {
 
   std::unique_ptr<duckdb::ArrowArrayStreamWrapper>
   arrow_table_produce(uintptr_t data,
-                      std::pair<
-                        std::unordered_map<idx_t, std::string>,
-                        std::vector<std::string>
-                      > &project_columns,
-                      duckdb::TableFilterCollection *filters)
+                      duckdb::ArrowStreamParameters &parameters)
   {
-    auto stream_wrapper_result =
-      arrow_table_produce_internal(data, project_columns, filters);
+    auto stream_wrapper_result = arrow_table_produce_internal(data, parameters);
     if (!stream_wrapper_result.ok()) {
       throw std::runtime_error(
         std::string("[arrow][produce] failed to produce: ") +
         stream_wrapper_result.status().ToString());
     }
     return std::move(*stream_wrapper_result);
+  }
+
+  void
+  arrow_table_get_schema(uintptr_t data, duckdb::ArrowSchemaWrapper &schema)
+  {
+    auto garrow_table = GARROW_TABLE(reinterpret_cast<gpointer>(data));
+    auto arrow_table = garrow_table_get_raw(garrow_table);
+    arrow::ExportSchema(*(arrow_table->schema()),
+                        reinterpret_cast<ArrowSchema *>(&schema));
   }
 }
 
@@ -245,14 +248,13 @@ namespace arrow_duckdb {
   {
     auto c_name = StringValueCStr(name);
     auto garrow_table = RVAL2GOBJ(arrow_table);
-    const idx_t rows_per_tuple = 1000000;
     reinterpret_cast<duckdb::Connection *>(connection)
       ->TableFunction(
         "arrow_scan",
         {
           duckdb::Value::POINTER(reinterpret_cast<uintptr_t>(garrow_table)),
           duckdb::Value::POINTER(reinterpret_cast<uintptr_t>(arrow_table_produce)),
-          duckdb::Value::UBIGINT(rows_per_tuple)
+          duckdb::Value::POINTER(reinterpret_cast<uintptr_t>(arrow_table_get_schema)),
         })
       ->CreateView(c_name, true, true);
   }
