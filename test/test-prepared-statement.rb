@@ -28,7 +28,7 @@ class TestPreparedStatement < Test::Unit::TestCase
 
   test("#execute_arrow") do
     @prepared_statement.bind(1, "alice")
-    assert_equal([Arrow::RecordBatch.new("string" => ["alice"])],
+    assert_equal([Arrow::RecordBatch.new("name" => ["alice"])],
                  @prepared_statement.execute_arrow.to_a)
   end
 end

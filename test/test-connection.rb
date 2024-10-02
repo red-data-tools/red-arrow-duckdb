@@ -35,7 +35,7 @@ class TestConnection < Test::Unit::TestCase
       result = @connection.query("SELECT * FROM users WHERE name = ?",
                                  'alice',
                                  output: :arrow)
-      assert_equal([Arrow::RecordBatch.new("string" => ["alice"])],
+      assert_equal([Arrow::RecordBatch.new("name" => ["alice"])],
                    result.to_a)
     end
   end

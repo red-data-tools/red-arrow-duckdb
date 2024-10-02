@@ -163,14 +163,11 @@ namespace {
   }
 
   arrow::compute::Expression
-  convert_filters(std::unordered_map<
-                    idx_t,
-                    std::unique_ptr<duckdb::TableFilter>
-                  > &filters,
+  convert_filters(duckdb::TableFilterSet *filter_set,
                   std::unordered_map<idx_t, std::string> &column_names)
   {
     std::vector<arrow::compute::Expression> expressions;
-    for (auto it = filters.begin(); it != filters.end(); ++it) {
+    for (auto it = filter_set->filters.begin(); it != filter_set->filters.end(); ++it) {
       expressions.emplace_back(
         std::move(convert_filter(it->second.get(), column_names[it->first])));
     }
@@ -192,7 +189,7 @@ namespace {
     if (have_filter) {
       ARROW_RETURN_NOT_OK(
         scanner_builder->Filter(
-          convert_filters(parameters.filters->filters,
+          convert_filters(parameters.filters,
                           parameters.projected_columns.projection_map)));
     }
     if (!parameters.projected_columns.columns.empty()) {
@@ -202,7 +199,7 @@ namespace {
     }
     ARROW_ASSIGN_OR_RAISE(auto scanner, scanner_builder->Finish());
     ARROW_ASSIGN_OR_RAISE(auto reader, scanner->ToRecordBatchReader());
-    auto stream_wrapper = duckdb::make_unique<duckdb::ArrowArrayStreamWrapper>();
+    auto stream_wrapper = duckdb::make_uniq<duckdb::ArrowArrayStreamWrapper>();
     ARROW_RETURN_NOT_OK(
       arrow::ExportRecordBatchReader(reader,
                                      &(stream_wrapper->arrow_array_stream)));
@@ -227,8 +224,13 @@ namespace {
   {
     auto garrow_table = GARROW_TABLE(reinterpret_cast<gpointer>(data));
     auto arrow_table = garrow_table_get_raw(garrow_table);
-    arrow::ExportSchema(*(arrow_table->schema()),
-                        reinterpret_cast<ArrowSchema *>(&schema));
+    auto export_schema_status = arrow::ExportSchema(*(arrow_table->schema()),
+                                                    reinterpret_cast<ArrowSchema *>(&schema));
+    if (!export_schema_status.ok()) {
+      throw std::runtime_error(
+        std::string("[arrow][get_schema] failed to export schema: ") +
+        export_schema_status.ToString());
+    }
   }
 }
 
