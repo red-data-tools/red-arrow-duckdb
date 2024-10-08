@@ -16,7 +16,7 @@ require "extpp"
 require "mkmf-gnome"
 require "native-package-installer"
 
-checking_for(checking_message("Homebrew")) do
+homebrew = checking_for(checking_message("Homebrew")) do
   case NativePackageInstaller::Platform.detect
   when NativePackageInstaller::Platform::Homebrew
     openssl_prefix = `brew --prefix openssl`.chomp
@@ -40,6 +40,10 @@ unless have_library("duckdb")
   install_missing_native_package(debian: "libduckdb-dev",
                                  redhat: "duckdb-devel",
                                  homebrew: "duckdb") or exit(false)
+  if homebrew
+    $INCFLAGS << " -I" << File.join(`brew --prefix duckdb`.chomp, "include")
+    $LIBPATH |= [File.join(`brew --prefix duckdb`.chomp, "lib")]
+  end
   have_library("duckdb") or exit(false)
 end
 
