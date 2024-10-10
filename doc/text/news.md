@@ -1,5 +1,17 @@
 # News
 
+## 1.0.3 - 2024-10-11
+
+### Improvements
+
+  * Added support for DuckDB 1.1.0
+    * GH-4
+    * Patch by Sten Larsson
+
+### Thanks
+
+  * Sten Larsson
+
 ## 1.0.2 - 2022-03-06
 
 ### Improvements
