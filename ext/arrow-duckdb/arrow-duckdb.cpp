@@ -20,7 +20,9 @@
 
 #include <rbgobject.h>
 
+extern "C" {
 #include <ruby-duckdb.h>
+}
 
 #include "arrow-duckdb-registration.hpp"
 
@@ -99,7 +101,7 @@ namespace {
   result_ensure_gschema(Result *result)
   {
     ArrowSchema c_abi_schema;
-    duckdb_arrow_schema schema = &c_abi_schema;
+    auto schema = reinterpret_cast<duckdb_arrow_schema>(&c_abi_schema);
     auto state = duckdb_query_arrow_schema(result->arrow, &schema);
     if (state == DuckDBError) {
       free(result->error_message);
@@ -121,7 +123,7 @@ namespace {
   result_fetch_internal(VALUE self, Result *result)
   {
     ArrowArray c_abi_array = {};
-    duckdb_arrow_array array = &c_abi_array;
+    auto array = reinterpret_cast<duckdb_arrow_array>(&c_abi_array);
     auto state = duckdb_query_arrow_array(result->arrow, &array);
     if (state == DuckDBError) {
       free(result->error_message);
@@ -219,8 +221,7 @@ namespace {
   VALUE
   query_sql_arrow(VALUE self, VALUE sql)
   {
-    rubyDuckDBConnection *ctx;
-    Data_Get_Struct(self, rubyDuckDBConnection, ctx);
+    auto ctx = get_struct_connection(self);
 
     if (!(ctx->con)) {
       rb_raise(eDuckDBError, "Database connection closed");
@@ -253,8 +254,7 @@ namespace {
   VALUE
   query_unregister_arrow(VALUE self, VALUE name)
   {
-    rubyDuckDBConnection *ctx;
-    Data_Get_Struct(self, rubyDuckDBConnection, ctx);
+    auto ctx = get_struct_connection(self);
 
     if (!(ctx->con)) {
       rb_raise(eDuckDBError, "Database connection closed");
@@ -293,8 +293,7 @@ namespace {
   VALUE
   query_register_arrow(VALUE self, VALUE name, VALUE arrow_table)
   {
-    rubyDuckDBConnection *ctx;
-    Data_Get_Struct(self, rubyDuckDBConnection, ctx);
+    auto ctx = get_struct_connection(self);
 
     if (!(ctx->con)) {
       rb_raise(eDuckDBError, "Database connection closed");
@@ -329,8 +328,7 @@ namespace {
   VALUE
   prepared_statement_execute_arrow(VALUE self)
   {
-    rubyDuckDBPreparedStatement *ctx;
-    Data_Get_Struct(self, rubyDuckDBPreparedStatement, ctx);
+    auto ctx = get_struct_prepared_statement(self);
 
     ID id_new;
     CONST_ID(id_new, "new");
